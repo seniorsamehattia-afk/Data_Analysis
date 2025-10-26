@@ -322,18 +322,18 @@ with col2:
 
         # Insights
         # ---------------------------------------------------------------
-        # 📊 Automated Insights
-        # ---------------------------------------------------------------
-       # =====================================
-        # 🤖 Automated Insights (Smart Version)
         # =====================================
-        st.header("🤖 Automated Insights")
+        # 🤖 Automated Insights (Enhanced Table View)
+        # =====================================
         
         import numpy as np
         import pandas as pd
+        import streamlit as st
+        
+        st.header("🤖 Automated Insights")
         
         try:
-            # --- Helper: Safe column finder (ignores naming variations) ---
+            # Helper: Find column name safely
             def safe_find(df, possible_names):
                 for name in possible_names:
                     for col in df.columns:
@@ -341,50 +341,58 @@ with col2:
                             return col
                 return None
         
-            # --- Detect likely columns automatically ---
-            revenue_col = safe_find(df, ["القيمة بعد الضريبة", "صافي المبيعات", "الإيرادات", "Revenue"])
-            discount_col = safe_find(df, ["الخصومات", "خصم", "Discount"])
-            tax_col = safe_find(df, ["الضريبة", "ضريبة الصنف", "Tax"])
-            qty_col = safe_find(df, ["الكمية", "كمية كرتون", "Quantity"])
+            # --- Detect columns automatically ---
+            revenue_col = safe_find(df, ["القيمة بعد الضريبة", "صافي المبيعات", "الإيرادات", "Revenue", "Total Revenue"])
+            discount_col = safe_find(df, ["الخصومات", "خصم", "Discount", "Total Discount"])
+            tax_col = safe_find(df, ["الضريبة", "ضريبة الصنف", "Tax", "Total Tax"])
+            qty_col = safe_find(df, ["الكمية", "كمية كرتون", "Quantity", "Total Quantity"])
             branch_col = safe_find(df, ["الفرع", "Branch"])
             salesman_col = safe_find(df, ["اسم المندوب", "مندوب", "Salesman"])
             product_col = safe_find(df, ["اسم الصنف", "الصنف", "Product"])
         
-            # --- Build insights dictionary dynamically ---
-            insights_data = {}
+            # --- Compute insights dynamically ---
+            insights_dict = {}
         
             if revenue_col in df.columns:
-                insights_data["إجمالي الإيرادات"] = [f"{df[revenue_col].sum():,.2f}"]
+                insights_dict["Total Revenue"] = f"{df[revenue_col].sum():,.2f}"
             if discount_col in df.columns:
-                insights_data["إجمالي الخصومات"] = [f"{df[discount_col].sum():,.2f}"]
+                insights_dict["Total Discounts"] = f"{df[discount_col].sum():,.2f}"
             if tax_col in df.columns:
-                insights_data["إجمالي الضريبة"] = [f"{df[tax_col].sum():,.2f}"]
+                insights_dict["Total Tax"] = f"{df[tax_col].sum():,.2f}"
             if qty_col in df.columns:
-                insights_data["إجمالي الكمية"] = [f"{df[qty_col].sum():,.2f}"]
+                insights_dict["Total Quantity"] = f"{df[qty_col].sum():,.2f}"
         
-            # --- Top performers ---
             if branch_col in df.columns and revenue_col in df.columns:
                 top_branch = df.groupby(branch_col)[revenue_col].sum().idxmax()
-                insights_data["الفرع الأعلى في الإيرادات"] = [top_branch]
+                insights_dict["Top Branch by Revenue"] = str(top_branch)
         
             if salesman_col in df.columns and revenue_col in df.columns:
                 top_salesman = df.groupby(salesman_col)[revenue_col].sum().idxmax()
-                insights_data["أفضل مندوب مبيعات"] = [top_salesman]
+                insights_dict["Top Salesman"] = str(top_salesman)
         
             if product_col in df.columns and revenue_col in df.columns:
                 top_product = df.groupby(product_col)[revenue_col].sum().idxmax()
-                insights_data["المنتج الأعلى مبيعًا"] = [top_product]
+                insights_dict["Top Product"] = str(top_product)
         
-            # --- Display insights table ---
-            if not insights_data:
-                st.info("⚠️ لا توجد أعمدة مطابقة في الملف لحساب المؤشرات التلقائية.")
-            else:
-                insights_df = pd.DataFrame(insights_data)
-                st.table(insights_df)
+            # --- Display nicely on the left side ---
+            st.markdown("### 📊 Key Insights Summary")
+            col1, col2 = st.columns([1.2, 2])
+        
+            with col1:
+                if insights_dict:
+                    insights_df = pd.DataFrame(list(insights_dict.items()), columns=["Insight", "Value"])
+                    st.table(insights_df)
+                else:
+                    st.info("⚠️ No matching columns found for insights calculation.")
+        
+            with col2:
+                st.info("📈 These insights summarize your uploaded data automatically (revenue, discounts, top performers, etc.).")
         
         except Exception as e:
-            st.error(f"⚠️ حدث خطأ أثناء إنشاء التحليلات التلقائية: {e}")
+            st.error(f"⚠️ Error generating insights: {e}")
 
+        
+            
         
 
 
