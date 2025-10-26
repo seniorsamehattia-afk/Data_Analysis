@@ -432,8 +432,16 @@ with col2:
                         tmp = tmp.dropna(subset=[date_col])
                         tmp = tmp.sort_values(date_col)
                         # aggregate by date if duplicates
-                        tmp_agg = tmp.groupby(date_col)[fc_col].sum()
+                        tmp = df[[date_col, fc_col]].copy()
+                        tmp[date_col] = pd.to_datetime(tmp[date_col], errors='coerce', infer_datetime_format=True)
+                        tmp = tmp.dropna(subset=[date_col])
+                        tmp = tmp.sort_values(date_col)
+                        # ✅ aggregate by date safely
+                        tmp_agg = tmp.groupby(tmp[date_col].dt.to_period("D"))[fc_col].sum()
+                        tmp_agg.index = tmp_agg.index.to_timestamp()
+                        tmp_agg = tmp_agg[~tmp_agg.index.duplicated(keep="first")]
                         pred = simple_forecast(tmp_agg, periods=int(fc_periods))
+                        
                         if pred.empty:
                             st.info('Not enough data to forecast')
                         else:
