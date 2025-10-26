@@ -267,13 +267,37 @@ with col2:
         numeric_cols = st.multiselect(t('kpi_selection'), options=all_cols, default=[c for c in all_cols if pd.api.types.is_numeric_dtype(df[c])][:3])
 
         # Totals and KPIs
-        st.subheader(t('total_everything'))
-        totals_dict, grand = grand_totals(df)
-        kpi_display = list(totals_dict.keys())[:4]
-        kpi_cols = st.columns(len(kpi_display) if kpi_display else 1)
-        for i, k in enumerate(kpi_display):
-            kpi_cols[i].metric(k, f"{totals_dict[k]:,.2f}")
-        st.markdown(f"**{t('grand_total')}:** {grand:,.2f}")
+        # ---------------------------------------------------------------
+        # 🧮 Totals and KPIs (Global totals + Selected totals)
+        # ---------------------------------------------------------------
+        st.subheader("🔹 " + t('total_everything') + " — جميع الأعمدة الرقمية")
+        
+        # --- Global Totals (all numeric columns) ---
+        totals_dict_all, grand_all = grand_totals(df)
+        kpi_cols_display = list(totals_dict_all.keys())[:4]
+        kpi_cols = st.columns(len(kpi_cols_display) if kpi_cols_display else 1)
+        for i, k in enumerate(kpi_cols_display):
+            kpi_cols[i].metric(k, f"{totals_dict_all[k]:,.2f}")
+        st.markdown(f"**{t('grand_total')}:** {grand_all:,.2f}")
+        
+        st.markdown("---")
+        
+        # --- Selected Totals (based only on selected numeric columns) ---
+        st.subheader("🔸 المجموع للأعمدة المحددة فقط")
+        
+        if numeric_cols:
+            selected_df = df[numeric_cols].select_dtypes(include=[np.number])
+            totals_dict = selected_df.sum(numeric_only=True).to_dict()
+            grand = selected_df.sum(numeric_only=True).sum()
+        
+            kpi_cols = st.columns(len(totals_dict) if totals_dict else 1)
+            for i, (col, val) in enumerate(totals_dict.items()):
+                kpi_cols[i].metric(col, f"{val:,.2f}")
+        
+            st.markdown(f"**الإجمالي الكلي للأعمدة المحددة:** {grand:,.2f}")
+        else:
+            st.info("⚠️ لم يتم تحديد أي أعمدة رقمية لحساب المجموع.")
+
 
         # Stats summary
         st.subheader(t('stats_summary'))
