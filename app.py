@@ -319,14 +319,59 @@ with col2:
             st.info('No numeric columns for statistics')
 
         # Insights
-        st.subheader(t('insights'))
-        insights = []
-        miss = df.isna().sum()
-        if miss.sum() > 0:
-            insights.append('Missing values exist in: ' + ', '.join(miss[miss>0].index.astype(str)))
-        else:
-            insights.append('No missing values detected')
-        insights.append(f"Rows: {df.shape[0]}, Columns: {df.shape[1]}")
+        # ---------------------------------------------------------------
+        # 📊 Automated Insights
+        # ---------------------------------------------------------------
+        st.markdown("## 🤖 Automated Insights")
+        
+        try:
+            # Adjust column names below to match your actual dataset
+            revenue_col = "القيمة بعد الضريبة"     # total revenue column
+            discount_col = "الخصومات"               # discount column
+            tax_col = "ضريبة الصنف"                 # tax column
+            qty_col = "كمية كرتون"                  # quantity column
+            branch_col = "الفرع"                    # branch column
+            salesman_col = "اسم المندوب"            # salesman column
+            product_col = "اسم الصنف"               # product column
+        
+            total_revenue = df[revenue_col].sum()
+            total_discount = df[discount_col].sum()
+            total_tax = df[tax_col].sum()
+            total_qty = df[qty_col].sum()
+        
+            # Find top entities
+            top_branch = df.groupby(branch_col)[revenue_col].sum().idxmax()
+            top_salesman = df.groupby(salesman_col)[revenue_col].sum().idxmax()
+            top_product = df.groupby(product_col)[revenue_col].sum().idxmax()
+        
+            # Display results as a table
+            insights_data = {
+                "Metric": [
+                    "Total Revenue",
+                    "Total Discounts",
+                    "Total Tax",
+                    "Total Quantity",
+                    "Top Branch by Revenue",
+                    "Top Salesman",
+                    "Top Product"
+                ],
+                "Value": [
+                    f"{total_revenue:,.2f}",
+                    f"{total_discount:,.2f}",
+                    f"{total_tax:,.2f}",
+                    f"{total_qty:,.0f}",
+                    top_branch,
+                    top_salesman,
+                    top_product
+                ]
+            }
+        
+            insights_df = pd.DataFrame(insights_data)
+            st.table(insights_df)
+        
+        except Exception as e:
+            st.error(f"⚠️ Could not generate automated insights: {e}")
+
 
         # top categorical values with safe handling
         obj_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
