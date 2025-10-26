@@ -24,18 +24,7 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-uploaded_file = st.file_uploader("📁 Upload Excel file", type=["xlsx", "xls"])
 
-# Save uploaded file to session_state
-if uploaded_file is not None:
-    df = pd.read_excel(uploaded_file)
-    st.session_state["df"] = df  # store in session
-    st.success("✅ File uploaded successfully!")
-elif "df" in st.session_state:
-    df = st.session_state["df"]  # retrieve saved data
-else:
-    st.warning("⚠️ Please upload an Excel file to start.")
-    st.stop()
 
 # ---------------- Translations ----------------
 TRANSLATIONS = {
@@ -112,6 +101,46 @@ TRANSLATIONS = {
 def t(key: str) -> str:
     lang = st.session_state.get('lang', 'en')
     return TRANSLATIONS.get(lang, TRANSLATIONS['en']).get(key, key)
+import streamlit as st
+import pandas as pd
+import numpy as np
+
+# --------------------------
+# 🌐 Language Selection
+# --------------------------
+lang = st.sidebar.radio("🌐 Language", ["English", "العربية"], index=0)
+st.session_state["lang"] = "ar" if lang == "العربية" else "en"
+
+def t(text):
+    translations = {
+        "Upload Excel file": "📁 رفع ملف إكسل",
+        "File uploaded successfully!": "✅ تم رفع الملف بنجاح!",
+        "Please upload an Excel file to start.": "⚠️ يرجى رفع ملف إكسل للبدء.",
+    }
+    return translations[text] if st.session_state["lang"] == "ar" else text
+
+
+# --------------------------
+# 📂 Upload Excel Section
+# --------------------------
+uploaded_file = st.file_uploader(t("Upload Excel file"), type=["xlsx", "xls"])
+
+# ✅ Save uploaded file to session_state (so it’s not lost when switching language)
+if uploaded_file is not None:
+    df = pd.read_excel(uploaded_file)
+    st.session_state["df"] = df  # store in session
+    st.success(t("File uploaded successfully!"))
+elif "df" in st.session_state:
+    df = st.session_state["df"]  # retrieve saved data
+else:
+    st.warning(t("Please upload an Excel file to start."))
+    st.stop()
+
+
+# --------------------------
+# 📊 Continue with your app (charts, KPIs, insights, etc.)
+# --------------------------
+st.dataframe(df)
 
 # ---------------- Helper functions ----------------
 
