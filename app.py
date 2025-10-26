@@ -325,75 +325,69 @@ with col2:
         # 📊 Automated Insights
         # ---------------------------------------------------------------
         st.markdown("## 🤖 Automated Insights")
-        # --- Debugging helper: show columns ---
-        st.write("🔍 Available columns:", df.columns.tolist())
+        # =====================================
+        # 🤖 Automated Insights (Smart Version)
+        # =====================================
+        st.header("🤖 Automated Insights")
         
-        # --- Helper to safely find Arabic columns ---
-        def safe_col(df, name):
-            for c in df.columns:
-                if c.strip() == name.strip():
-                    return c
-            return None
+        import numpy as np
+        import pandas as pd
         
-        # Match your dataset column names exactly here:
-        salesman_col = safe_col(df, "المندوب")
-        branch_col = safe_col(df, "الفرع")
-        product_col = safe_col(df, "اسم الصنف")
-        revenue_col = safe_col(df, "القيمة بعد الضريبة")
-        discount_col = safe_col(df, "الخصومات")
-        tax_col = safe_col(df, "ضريبة الصنف")
-        qty_col = safe_col(df, "كمية كرتون")
-        
-        if not all([salesman_col, branch_col, product_col, revenue_col]):
-            st.warning("⚠️ بعض الأعمدة المطلوبة غير موجودة في الملف. يرجى التأكد من أسماء الأعمدة.")
-
         try:
-            # Adjust column names below to match your actual dataset
-            revenue_col = "القيمة بعد الضريبة"     # total revenue column
-            discount_col = "الخصومات"               # discount column
-            tax_col = "ضريبة الصنف"                 # tax column
-            qty_col = "كمية كرتون"                  # quantity column
-            branch_col = "الفرع"                    # branch column
-            salesman_col = "المندوب"            # salesman column
-            product_col = "اسم الصنف"               # product column
+            # --- Helper: Safely find column names (ignores spaces or case differences) ---
+            def safe_find(df, possible_names):
+                for name in possible_names:
+                    for col in df.columns:
+                        if str(col).strip() == str(name).strip():
+                            return col
+                return None
         
-            total_revenue = df[revenue_col].sum()
-            total_discount = df[discount_col].sum()
-            total_tax = df[tax_col].sum()
-            total_qty = df[qty_col].sum()
+            # --- Try to match the most common Arabic column names ---
+            revenue_col = safe_find(df, ["القيمة بعد الضريبة", "صافي المبيعات", "الإيرادات", "Revenue"])
+            discount_col = safe_find(df, ["الخصومات", "خصم", "Discount"])
+            tax_col = safe_find(df, ["الضريبة", "ضريبة الصنف", "Tax"])
+            qty_col = safe_find(df, ["الكمية", "كمية كرتون", "Quantity"])
+            branch_col = safe_find(df, ["الفرع", "Branch"])
+            salesman_col = safe_find(df, ["اسم المندوب", "مندوب", "Salesman"])
+            product_col = safe_find(df, ["اسم الصنف", "الصنف", "Product"])
         
-            # Find top entities
-            top_branch = df.groupby(branch_col)[revenue_col].sum().idxmax()
-            top_salesman = df.groupby(salesman_col)[revenue_col].sum().idxmax()
-            top_product = df.groupby(product_col)[revenue_col].sum().idxmax()
+            # --- Initialize dictionary for insights ---
+            insights_data = {}
         
-            # Display results as a table
-            insights_data = {
-                "Metric": [
-                    "Total Revenue",
-                    "Total Discounts",
-                    "Total Tax",
-                    "Total Quantity",
-                    "Top Branch by Revenue",
-                    "Top Salesman",
-                    "Top Product"
-                ],
-                "Value": [
-                    f"{total_revenue:,.2f}",
-                    f"{total_discount:,.2f}",
-                    f"{total_tax:,.2f}",
-                    f"{total_qty:,.0f}",
-                    top_branch,
-                    top_salesman,
-                    top_product
-                ]
-            }
+            # --- Totals if columns exist ---
+            if revenue_col in df.columns:
+                insights_data["إجمالي الإيرادات"] = [f"{df[revenue_col].sum():,.2f}"]
+            if discount_col in df.columns:
+                insights_data["إجمالي الخصومات"] = [f"{df[discount_col].sum():,.2f}"]
+            if tax_col in df.columns:
+                insights_data["إجمالي الضريبة"] = [f"{df[tax_col].sum():,.2f}"]
+            if qty_col in df.columns:
+                insights_data["إجمالي الكمية"] = [f"{df[qty_col].sum():,.2f}"]
         
-            insights_df = pd.DataFrame(insights_data)
-            st.table(insights_df)
+            # --- Top Branch / Salesman / Product ---
+            if branch_col in df.columns and revenue_col in df.columns:
+                top_branch = df.groupby(branch_col)[revenue_col].sum().idxmax()
+                insights_data["الفرع الأعلى في الإيرادات"] = [top_branch]
+        
+            if salesman_col in df.columns and revenue_col in df.columns:
+                top_salesman = df.groupby(salesman_col)[revenue_col].sum().idxmax()
+                insights_data["أفضل مندوب مبيعات"] = [top_salesman]
+        
+            if product_col in df.columns and revenue_col in df.columns:
+                top_product = df.groupby(product_col)[revenue_col].sum().idxmax()
+                insights_data["المنتج الأعلى مبيعًا"] = [top_product]
+        
+            # --- If no insights found ---
+            if not insights_data:
+                st.info("⚠️ لا توجد أعمدة مطابقة في الملف لاحتساب المؤشرات التلقائية.")
+            else:
+                # --- Display the table ---
+                insights_df = pd.DataFrame(insights_data)
+                st.table(insights_df)
         
         except Exception as e:
-            st.error(f"⚠️ Could not generate automated insights: {e}")
+            st.error(f"⚠️ فشل في إنشاء التحليلات التلقائية: {e}")
+
 
 
         # top categorical values with safe handling
