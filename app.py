@@ -17,7 +17,7 @@ st.markdown(
     """
     <hr style="margin-top:50px; margin-bottom:10px; border:1px solid #444;">
     <div style='text-align: center; color: #aaa; font-size: 14px;'>
-        Created by <b style='color:#00BFFF;'>Sameh Sobhy</b>
+        Created by <b style='color:#00BFFF;'>Sameh Sobhy Attia</b>
     </div>
     """,
     unsafe_allow_html=True
