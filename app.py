@@ -336,7 +336,7 @@ with col2:
             return None
         
         # Match your dataset column names exactly here:
-        salesman_col = safe_col(df, "اسم المندوب")
+        salesman_col = safe_col(df, "المندوب")
         branch_col = safe_col(df, "الفرع")
         product_col = safe_col(df, "اسم الصنف")
         revenue_col = safe_col(df, "القيمة بعد الضريبة")
@@ -354,7 +354,7 @@ with col2:
             tax_col = "ضريبة الصنف"                 # tax column
             qty_col = "كمية كرتون"                  # quantity column
             branch_col = "الفرع"                    # branch column
-            salesman_col = "اسم المندوب"            # salesman column
+            salesman_col = "المندوب"            # salesman column
             product_col = "اسم الصنف"               # product column
         
             total_revenue = df[revenue_col].sum()
