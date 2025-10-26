@@ -12,20 +12,6 @@ import matplotlib.pyplot as plt
 import io
 import xlsxwriter
 
-def safe_col(df, name):
-    for c in df.columns:
-        if c.strip() == name.strip():
-            return c
-    return None
-
-salesman_col = safe_col(df, "اسم المندوب")
-branch_col = safe_col(df, "الفرع")
-product_col = safe_col(df, "اسم الصنف")
-
-if not all([salesman_col, branch_col, product_col]):
-    st.warning("⚠️ Some columns for Automated Insights were not found in your data.")
-else:
-    # continue with insights generation
 
 # ✨ Footer (Dark mode friendly)
 # ---------------------------------------------------------------
@@ -339,7 +325,28 @@ with col2:
         # 📊 Automated Insights
         # ---------------------------------------------------------------
         st.markdown("## 🤖 Automated Insights")
+        # --- Debugging helper: show columns ---
+        st.write("🔍 Available columns:", df.columns.tolist())
         
+        # --- Helper to safely find Arabic columns ---
+        def safe_col(df, name):
+            for c in df.columns:
+                if c.strip() == name.strip():
+                    return c
+            return None
+        
+        # Match your dataset column names exactly here:
+        salesman_col = safe_col(df, "اسم المندوب")
+        branch_col = safe_col(df, "الفرع")
+        product_col = safe_col(df, "اسم الصنف")
+        revenue_col = safe_col(df, "القيمة بعد الضريبة")
+        discount_col = safe_col(df, "الخصومات")
+        tax_col = safe_col(df, "ضريبة الصنف")
+        qty_col = safe_col(df, "كمية كرتون")
+        
+        if not all([salesman_col, branch_col, product_col, revenue_col]):
+            st.warning("⚠️ بعض الأعمدة المطلوبة غير موجودة في الملف. يرجى التأكد من أسماء الأعمدة.")
+
         try:
             # Adjust column names below to match your actual dataset
             revenue_col = "القيمة بعد الضريبة"     # total revenue column
