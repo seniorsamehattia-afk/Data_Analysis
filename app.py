@@ -24,6 +24,18 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+uploaded_file = st.file_uploader("📁 Upload Excel file", type=["xlsx", "xls"])
+
+# Save uploaded file to session_state
+if uploaded_file is not None:
+    df = pd.read_excel(uploaded_file)
+    st.session_state["df"] = df  # store in session
+    st.success("✅ File uploaded successfully!")
+elif "df" in st.session_state:
+    df = st.session_state["df"]  # retrieve saved data
+else:
+    st.warning("⚠️ Please upload an Excel file to start.")
+    st.stop()
 
 # ---------------- Translations ----------------
 TRANSLATIONS = {
