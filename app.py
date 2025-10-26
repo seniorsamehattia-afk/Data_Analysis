@@ -15,6 +15,35 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
+# ==============================
+# 🧭 Sidebar: Language + Theme
+# ==============================
+st.sidebar.title("🌐 Language")
+
+lang = st.sidebar.radio("Language", ["English", "العربية"])
+st.session_state["lang"] = "ar" if lang == "العربية" else "en"
+
+dark_mode = st.sidebar.checkbox("🌙 الوضع الداكن", value=True)
+
+# ==============================
+# 📂 File Upload (after language)
+# ==============================
+st.sidebar.markdown("---")  # separator line
+st.sidebar.subheader("📁 Upload Excel File")
+
+uploaded_file = st.sidebar.file_uploader(
+    "Upload Excel file", type=["xlsx", "xls"]
+)
+
+if uploaded_file is not None:
+    df = pd.read_excel(uploaded_file)
+    st.session_state["df"] = df
+    st.sidebar.success("✅ File uploaded successfully!")
+elif "df" in st.session_state:
+    df = st.session_state["df"]
+else:
+    st.sidebar.warning("⚠️ Please upload an Excel file to start.")
+    st.stop()
 
 # ✨ Footer (Dark mode friendly)
 # ---------------------------------------------------------------
@@ -100,37 +129,6 @@ TRANSLATIONS = {
         'download_pivot': 'تحميل الجدول المحوري كـ Excel',
     }
 }
-
-# ==============================
-# 🧭 Sidebar: Language + Theme
-# ==============================
-st.sidebar.title("🌐 Language")
-
-lang = st.sidebar.radio("Language", ["English", "العربية"])
-st.session_state["lang"] = "ar" if lang == "العربية" else "en"
-
-dark_mode = st.sidebar.checkbox("🌙 الوضع الداكن", value=True)
-
-# ==============================
-# 📂 File Upload (after language)
-# ==============================
-st.sidebar.markdown("---")  # separator line
-st.sidebar.subheader("📁 Upload Excel File")
-
-uploaded_file = st.sidebar.file_uploader(
-    "Upload Excel file", type=["xlsx", "xls"]
-)
-
-if uploaded_file is not None:
-    df = pd.read_excel(uploaded_file)
-    st.session_state["df"] = df
-    st.sidebar.success("✅ File uploaded successfully!")
-elif "df" in st.session_state:
-    df = st.session_state["df"]
-else:
-    st.sidebar.warning("⚠️ Please upload an Excel file to start.")
-    st.stop()
-
 
 
 
