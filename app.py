@@ -324,8 +324,7 @@ with col2:
         # ---------------------------------------------------------------
         # 📊 Automated Insights
         # ---------------------------------------------------------------
-        st.markdown("## 🤖 Automated Insights")
-        # =====================================
+       # =====================================
         # 🤖 Automated Insights (Smart Version)
         # =====================================
         st.header("🤖 Automated Insights")
@@ -334,7 +333,7 @@ with col2:
         import pandas as pd
         
         try:
-            # --- Helper: Safely find column names (ignores spaces or case differences) ---
+            # --- Helper: Safe column finder (ignores naming variations) ---
             def safe_find(df, possible_names):
                 for name in possible_names:
                     for col in df.columns:
@@ -342,7 +341,7 @@ with col2:
                             return col
                 return None
         
-            # --- Try to match the most common Arabic column names ---
+            # --- Detect likely columns automatically ---
             revenue_col = safe_find(df, ["القيمة بعد الضريبة", "صافي المبيعات", "الإيرادات", "Revenue"])
             discount_col = safe_find(df, ["الخصومات", "خصم", "Discount"])
             tax_col = safe_find(df, ["الضريبة", "ضريبة الصنف", "Tax"])
@@ -351,10 +350,9 @@ with col2:
             salesman_col = safe_find(df, ["اسم المندوب", "مندوب", "Salesman"])
             product_col = safe_find(df, ["اسم الصنف", "الصنف", "Product"])
         
-            # --- Initialize dictionary for insights ---
+            # --- Build insights dictionary dynamically ---
             insights_data = {}
         
-            # --- Totals if columns exist ---
             if revenue_col in df.columns:
                 insights_data["إجمالي الإيرادات"] = [f"{df[revenue_col].sum():,.2f}"]
             if discount_col in df.columns:
@@ -364,7 +362,7 @@ with col2:
             if qty_col in df.columns:
                 insights_data["إجمالي الكمية"] = [f"{df[qty_col].sum():,.2f}"]
         
-            # --- Top Branch / Salesman / Product ---
+            # --- Top performers ---
             if branch_col in df.columns and revenue_col in df.columns:
                 top_branch = df.groupby(branch_col)[revenue_col].sum().idxmax()
                 insights_data["الفرع الأعلى في الإيرادات"] = [top_branch]
@@ -377,17 +375,17 @@ with col2:
                 top_product = df.groupby(product_col)[revenue_col].sum().idxmax()
                 insights_data["المنتج الأعلى مبيعًا"] = [top_product]
         
-            # --- If no insights found ---
+            # --- Display insights table ---
             if not insights_data:
-                st.info("⚠️ لا توجد أعمدة مطابقة في الملف لاحتساب المؤشرات التلقائية.")
+                st.info("⚠️ لا توجد أعمدة مطابقة في الملف لحساب المؤشرات التلقائية.")
             else:
-                # --- Display the table ---
                 insights_df = pd.DataFrame(insights_data)
                 st.table(insights_df)
         
         except Exception as e:
-            st.error(f"⚠️ فشل في إنشاء التحليلات التلقائية: {e}")
+            st.error(f"⚠️ حدث خطأ أثناء إنشاء التحليلات التلقائية: {e}")
 
+        
 
 
         # top categorical values with safe handling
@@ -401,7 +399,7 @@ with col2:
             except Exception as e:
                 vals = []
                 st.warning(f"Could not analyze column '{c}': {e}")
-            insights.append(f"Top values for {c}: {', '.join([str(v) for v in vals])}")
+            
 
         num = df.select_dtypes(include=[np.number])
         if num.shape[1] >= 2:
