@@ -423,43 +423,31 @@ with col2:
         fc_periods = st.number_input(t('forecast_periods'), min_value=1, max_value=365, value=12)
         if st.button(t('run_forecast')):
             if fc_col == '':
-                st.warning('Select a numeric column to forecast')
-            else:
-                if date_col:
-                    try:
-                        tmp = df[[date_col, fc_col]].copy()
-                        tmp[date_col] = pd.to_datetime(tmp[date_col], errors='coerce', infer_datetime_format=True)
-                        tmp = tmp.dropna(subset=[date_col])
-                        tmp = tmp.sort_values(date_col)
-                        # aggregate by date if duplicates
-                        tmp = df[[date_col, fc_col]].copy()
-                        tmp[date_col] = pd.to_datetime(tmp[date_col], errors='coerce', infer_datetime_format=True)
-                        tmp = tmp.dropna(subset=[date_col])
-                        tmp = tmp.sort_values(date_col)
-                        # ✅ aggregate by date safely
-                        tmp_agg = tmp.groupby(tmp[date_col].dt.to_period("D"))[fc_col].sum()
-                        tmp_agg.index = tmp_agg.index.to_timestamp()
-                        tmp_agg = tmp_agg[~tmp_agg.index.duplicated(keep="first")]
-                        pred = simple_forecast(tmp_agg, periods=int(fc_periods))
-                        
-                        if pred.empty:
-                            st.info('Not enough data to forecast')
-                        else:
-                            # attempt to create a datetime index for future based on median diff
-                            if isinstance(tmp_agg.index[0], (pd.Timestamp, datetime)):
-                                diffs = np.diff(tmp_agg.index.astype('int64') // 10**9)
-                                median = int(np.median(diffs)) if len(diffs) > 0 else 86400
-                                last = tmp_agg.index.max()
-                                future_dates = [last + pd.to_timedelta(median * (i+1), unit='s') for i in range(len(pred))]
-                                pred.index = future_dates
-                                combined = pd.concat([tmp_agg.rename('actual'), pred['forecast']], axis=1)
-                                st.line_chart(combined)
-                                st.dataframe(pred.head(50))
-                            else:
-                                st.line_chart(pd.concat([tmp_agg.rename('actual'), pred['forecast']], axis=0))
-                                st.dataframe(pred.head(50))
-                    except Exception as e:
-                        st.error(f'Forecasting failed: {e}')
+                try:
+                    tmp = df[[date_col, fc_col]].dropna()
+                    tmp[date_col] = pd.to_datetime(tmp[date_col], errors='coerce')
+                    tmp = tmp.dropna(subset=[date_col])
+                    tmp = tmp.groupby(date_col, as_index=False)[fc_col].mean()
+                    tmp = tmp.sort_values(by=date_col)
+                    y = tmp[fc_col].values
+                    x = range(len(y))
+                    coef = np.polyfit(x, y, 1)
+                    trend = np.poly1d(coef)
+                    last_date = tmp[date_col].max()
+                                 
+                    future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=steps, freq='D')
+                    future_x = range(len(y), len(y) + steps)
+                    forecast = trend(future_x)
+                    forecast_df = pd.DataFrame({date_col: future_dates, "forecast": forecast})
+                    fig = px.line()
+                    fig.add_scatter(x=tmp[date_col], y=tmp[fc_col], mode='lines', name='البيانات الفعلية')
+                    fig.add_scatter(x=forecast_df[date_col], y=forecast_df["forecast"], mode='lines',
+                                    name='التنبؤ', line=dict(dash='dash', color='red', width=3))
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.dataframe(forecast_df)
+                except Exception as e:
+                    st.error(f"Forecasting failed: {e}")
+
                 else:
                     # no date column: forecast on index sequence
                     series = df[fc_col]
