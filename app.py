@@ -109,41 +109,57 @@ def t(key: str) -> str:
 
 
 def read_file(uploaded_file):
-    """Smart file reader that auto-detects header row and cleans up Unnamed columns."""
+    """Read and clean Excel/CSV files with smart header detection."""
     if uploaded_file is None:
         return None
 
     name = uploaded_file.name.lower()
 
-    # Read Excel or CSV without assuming header
-    if name.endswith('.csv'):
-        df = pd.read_csv(uploaded_file, header=None, encoding='utf-8', engine='python')
-    else:
-        df = pd.read_excel(uploaded_file, header=None, engine='openpyxl')
+    # Try to read as Excel, then fallback to CSV
+    try:
+        df = pd.read_excel(uploaded_file, header=None)
+    except Exception:
+        try:
+            df = pd.read_csv(uploaded_file, header=None, encoding='utf-8')
+        except Exception:
+            st.error("⚠️ Could not read file. Please upload a valid Excel or CSV file.")
+            return None
 
     # Drop completely empty rows and columns
     df = df.dropna(how='all').dropna(axis=1, how='all')
 
-    # Detect header row: the one with the most non-null values
-    header_row = df.notna().sum(axis=1).idxmax()
-    df.columns = df.iloc[header_row].astype(str).str.strip()
-    df = df.iloc[header_row + 1:].reset_index(drop=True)
+    # Detect first non-empty row (likely headers)
+    header_row = None
+    for i in range(len(df)):
+        non_empty_ratio = df.iloc[i].notna().mean()
+        if non_empty_ratio > 0.5:  # if half of the cells are filled
+            header_row = i
+            break
 
-    # Clean columns: replace Unnamed or empty with generated names
+    # Use detected row as header
+    if header_row is not None:
+        df.columns = df.iloc[header_row].astype(str).str.strip()
+        df = df.iloc[header_row + 1:].reset_index(drop=True)
+
+    # Clean column names: remove Unnamed or blanks
     df.columns = [
-        c if (isinstance(c, str) and not c.strip().startswith("Unnamed") and c.strip() != "")
+        col if (isinstance(col, str) and not col.startswith("Unnamed") and col.strip() != "")
         else f"Column_{i}"
-        for i, c in enumerate(df.columns)
+        for i, col in enumerate(df.columns)
     ]
 
-    # Drop empty rows after header assignment
+    # Drop empty rows after cleaning
     df = df.dropna(how="all")
 
-    # Try to convert numeric columns safely
-    for col in df.columns:
-        df[col] = pd.to_numeric(df[col], errors="ignore")
+    # Try converting numeric columns
+    for c in df.columns:
+        try:
+            df[c] = pd.to_numeric(df[c], errors='ignore')
+        except Exception:
+            pass
 
     return df
+
 
 
 
