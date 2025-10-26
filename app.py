@@ -11,6 +11,22 @@ import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 import io
 import xlsxwriter
+
+def safe_col(df, name):
+    for c in df.columns:
+        if c.strip() == name.strip():
+            return c
+    return None
+
+salesman_col = safe_col(df, "اسم المندوب")
+branch_col = safe_col(df, "الفرع")
+product_col = safe_col(df, "اسم الصنف")
+
+if not all([salesman_col, branch_col, product_col]):
+    st.warning("⚠️ Some columns for Automated Insights were not found in your data.")
+else:
+    # continue with insights generation
+
 # ✨ Footer (Dark mode friendly)
 # ---------------------------------------------------------------
 st.markdown(
