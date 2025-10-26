@@ -14,7 +14,10 @@ import xlsxwriter
 import streamlit as st
 import pandas as pd
 import numpy as np
-
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import inch
+from io import BytesIO
 
 # ✨ Footer (Dark mode friendly)
 # ---------------------------------------------------------------
@@ -681,6 +684,79 @@ with col2:
         # Export reports
         st.markdown('---')
         st.subheader('Exports & Reports')
+        # ================================================================
+        # 📄 Export all data and KPIs as PDF
+        # ================================================================
+        st.subheader("📄 Export as PDF")
+        
+        if "df" in st.session_state:
+            df = st.session_state["df"]
+        
+            # Generate PDF button
+            if st.button("📥 Download Full Report (PDF)"):
+                buffer = BytesIO()
+                p = canvas.Canvas(buffer, pagesize=A4)
+                width, height = A4
+        
+                # Title
+                p.setFont("Helvetica-Bold", 16)
+                p.drawString(1 * inch, height - 1 * inch, "📊 Sales Analysis & Forecasting Report")
+                p.setFont("Helvetica", 10)
+                p.drawString(1 * inch, height - 1.3 * inch, "Generated automatically by the Streamlit Dashboard")
+        
+                # Spacing
+                y = height - 2 * inch
+        
+                # Summary KPIs
+                p.setFont("Helvetica-Bold", 12)
+                p.drawString(1 * inch, y, "Summary Totals:")
+                y -= 0.3 * inch
+                p.setFont("Helvetica", 10)
+        
+                numeric_df = df.select_dtypes(include=['number'])
+                totals = numeric_df.sum()
+                for col, val in totals.items():
+                    p.drawString(1.2 * inch, y, f"{col}: {val:,.2f}")
+                    y -= 0.25 * inch
+                    if y < 1.2 * inch:
+                        p.showPage()
+                        y = height - 1 * inch
+        
+                # Draw small separator line
+                p.line(1 * inch, y, 7 * inch, y)
+                y -= 0.3 * inch
+        
+                # Add top categorical info
+                p.setFont("Helvetica-Bold", 12)
+                p.drawString(1 * inch, y, "Top Categories:")
+                y -= 0.3 * inch
+                p.setFont("Helvetica", 10)
+        
+                for col in df.select_dtypes(exclude=['number']).columns[:3]:
+                    top_val = df[col].value_counts().idxmax()
+                    p.drawString(1.2 * inch, y, f"{col}: {top_val}")
+                    y -= 0.25 * inch
+                    if y < 1.2 * inch:
+                        p.showPage()
+                        y = height - 1 * inch
+        
+                # Add footer
+                p.showPage()
+                p.setFont("Helvetica-Oblique", 9)
+                p.drawString(1 * inch, 0.8 * inch, "Created by Sameh Sobhy | © 2025 All Rights Reserved")
+        
+                # Save and download
+                p.save()
+                buffer.seek(0)
+                st.download_button(
+                    label="⬇️ Click to Download PDF Report",
+                    data=buffer,
+                    file_name="sales_analysis_report.pdf",
+                    mime="application/pdf"
+                )
+        else:
+            st.warning("⚠️ Please upload your Excel file first.")
+
         if st.button(t('download_excel')):
             try:
                 sheets = {'Raw': df.copy(), 'Stats': stat.reset_index() if not stat.empty else pd.DataFrame()}
