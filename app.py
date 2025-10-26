@@ -101,9 +101,13 @@ TRANSLATIONS = {
     }
 }
 
+# ================================================
+# 🌐 Translation helper
+# ================================================
 def t(key: str) -> str:
     lang = st.session_state.get('lang', 'en')
-    return TRANSLATIONS.get(lang, TRANSLATIONS['en']).get(key, key
+    return TRANSLATIONS.get(lang, TRANSLATIONS['en']).get(key, key)
+
 
 
 # ---------------- Helper functions ----------------
