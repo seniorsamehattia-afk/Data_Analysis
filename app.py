@@ -323,7 +323,18 @@ with col2:
         # top categorical values
         obj_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
         for c in obj_cols[:3]:
-            vals = df[c].value_counts().head(3).index.tolist()
+            try:
+    # Ensure df[c] is a single column, not a DataFrame
+                col_data = df[c]
+                if isinstance(col_data, pd.DataFrame):
+                col_data = col_data.iloc[:, 0]
+
+    # Drop NaN and non-hashable values safely
+                vals = col_data.dropna().astype(str).value_counts().head(3).index.tolist()
+      except Exception as e:
+         vals = []
+         st.warning(f"Could not analyze column '{c}': {e}")
+
             insights.append(f"Top values for {c}: {', '.join([str(v) for v in vals])}")
         num = df.select_dtypes(include=[np.number])
         if num.shape[1] >= 2:
