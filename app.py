@@ -344,57 +344,67 @@ with col2:
             st.write('- ', ins)
 
         # Charts & visuals
+        # ---------------------------------------------------------------
+        # 📊 Charts & Visuals (allow multiple X and Y selections)
+        # ---------------------------------------------------------------
         st.markdown('---')
         st.subheader(t('charts'))
+        
         chart_cols = df.columns.tolist()
-        chart_type = st.selectbox(t('chart_type'), options=['Line', 'Bar', 'Area', 'Pie', 'Box', 'Scatter', 'Heatmap'])
-        x_axis = st.selectbox(t('x_axis'), options=[''] + chart_cols, index=0)
-        y_axis = st.selectbox(t('y_axis'), options=[''] + chart_cols, index=0)
+        chart_type = st.selectbox(t('chart_type'), options=['Line', 'Bar', 'Area', 'Scatter', 'Box', 'Pie', 'Heatmap'])
+        
+        # 🔹 Multi-selection for X and Y
+        x_axes = st.multiselect("🧭 " + t('x_axis'), options=chart_cols, default=[chart_cols[0]] if chart_cols else [])
+        y_axes = st.multiselect("📈 " + t('y_axis'), options=chart_cols, default=[chart_cols[1]] if len(chart_cols) > 1 else [])
+        
         if st.button(t('plot')):
             try:
                 fig = None
-                if chart_type == 'Line':
-                    if x_axis == '' or y_axis == '':
-                        st.warning('Select X and Y for line chart')
+        
+                if chart_type in ['Line', 'Bar', 'Area', 'Scatter']:
+                    if not x_axes or not y_axes:
+                        st.warning('يرجى اختيار عمود واحد على الأقل للمحور السيني والمحور الصادي.')
                     else:
-                        fig = px.line(df, x=x_axis, y=y_axis)
-                elif chart_type == 'Bar':
-                    if x_axis == '' or y_axis == '':
-                        st.warning('Select X and Y for bar chart')
-                    else:
-                        fig = px.bar(df, x=x_axis, y=y_axis)
-                elif chart_type == 'Area':
-                    if x_axis == '' or y_axis == '':
-                        st.warning('Select X and Y for area chart')
-                    else:
-                        fig = px.area(df, x=x_axis, y=y_axis)
-                elif chart_type == 'Pie':
-                    if y_axis == '':
-                        st.warning('Select a value column for pie chart')
-                    else:
-                        names = x_axis if x_axis != '' else df.columns[0]
-                        fig = px.pie(df, names=names, values=y_axis)
+                        for y_col in y_axes:
+                            if chart_type == 'Line':
+                                fig = px.line(df, x=x_axes[0], y=y_col, title=f"{chart_type} Chart - {y_col}")
+                            elif chart_type == 'Bar':
+                                fig = px.bar(df, x=x_axes[0], y=y_col, title=f"{chart_type} Chart - {y_col}")
+                            elif chart_type == 'Area':
+                                fig = px.area(df, x=x_axes[0], y=y_col, title=f"{chart_type} Chart - {y_col}")
+                            elif chart_type == 'Scatter':
+                                fig = px.scatter(df, x=x_axes[0], y=y_col, title=f"{chart_type} Chart - {y_col}")
+                            st.plotly_chart(fig, use_container_width=True)
+        
                 elif chart_type == 'Box':
-                    if y_axis == '':
-                        st.warning('Select Y for box plot')
+                    if not y_axes:
+                        st.warning('يرجى اختيار عمود واحد على الأقل للمحور الصادي.')
                     else:
-                        fig = px.box(df, y=y_axis)
-                elif chart_type == 'Scatter':
-                    if x_axis == '' or y_axis == '':
-                        st.warning('Select X and Y for scatter')
+                        fig = px.box(df, y=y_axes)
+                        st.plotly_chart(fig, use_container_width=True)
+        
+                elif chart_type == 'Pie':
+                    if not y_axes:
+                        st.warning('يرجى اختيار عمود للقيم.')
                     else:
-                        fig = px.scatter(df, x=x_axis, y=y_axis)
+                        for y_col in y_axes:
+                            names = x_axes[0] if x_axes else df.columns[0]
+                            fig = px.pie(df, names=names, values=y_col, title=f"مخطط دائري: {y_col}")
+                            st.plotly_chart(fig, use_container_width=True)
+        
                 elif chart_type == 'Heatmap':
                     num = df.select_dtypes(include=[np.number])
                     if num.shape[1] < 2:
-                        st.warning('Need at least two numeric columns for heatmap')
+                        st.warning('تحتاج على الأقل إلى عمودين رقميين لرسم خريطة حرارية.')
                     else:
                         corr = num.corr()
+                        import plotly.graph_objects as go
                         fig = go.Figure(data=go.Heatmap(z=corr.values, x=corr.columns, y=corr.index, zmin=-1, zmax=1))
-                if fig is not None:
-                    st.plotly_chart(fig, use_container_width=True)
+                        fig.update_layout(title="خريطة الارتباط الحرارية")
+                        st.plotly_chart(fig, use_container_width=True)
+        
             except Exception as e:
-                st.error(f"Could not create chart: {e}")
+                st.error(f"تعذر إنشاء المخطط: {e}")
 
         # Pivot table configuration
         st.markdown('---')
