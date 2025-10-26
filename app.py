@@ -11,6 +11,17 @@ import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 import io
 import xlsxwriter
+# ✨ Footer (Dark mode friendly)
+# ---------------------------------------------------------------
+st.markdown(
+    """
+    <hr style="margin-top:50px; margin-bottom:10px; border:1px solid #444;">
+    <div style='text-align: center; color: #aaa; font-size: 14px;'>
+        Created by <b style='color:#00BFFF;'>Sameh Sobhy</b>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 # ---------------- Translations ----------------
 TRANSLATIONS = {
