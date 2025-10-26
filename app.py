@@ -1,35 +1,16 @@
 # Sales_Insights_and_Forecasting.py
 # Streamlit app tailored for the uploaded Excel `مبيعات (1).xlsx`.
-# Features:
-# - Upload Excel / CSV
-# - Manual selection of date column (default attempts 'مبيعات')
-# - Manual selection of numeric columns (KPIs) and more selections for pivot
-# - Total of everything (sum of all numeric columns)
-# - Extended KPIs, statistics summary (count, mean, median, max, min, std)
-# - Pivot table configuration (multi row, multi column, aggregation types)
-# - Multiple charts (plotly): line, bar, area, pie, box, scatter, heatmap
-# - Simple trend forecasting (linear/quadratic) for any numeric column
-# - Insights (missing values, top values, correlations)
-# - Language toggle (Arabic / English)
-# - Dark / Light mode
-# - Export: Excel summary, HTML report
-# Save as: Sales_Insights_and_Forecasting.py
-# Run: streamlit run Sales_Insights_and_Forecasting.py
+# Updated: Forecasting shows real future dates and a confidence band.
 
 import streamlit as st
 import pandas as pd
 import numpy as np
-import datetime
-from datetime import datetime
+from datetime import datetime, timedelta
 import plotly.express as px
+import plotly.graph_objects as go
 import matplotlib.pyplot as plt
-from sklearn.linear_model import LinearRegression
-import statsmodels.api as sm
 import io
-import base64
-
-
-
+import xlsxwriter
 
 # ---------------- Translations ----------------
 TRANSLATIONS = {
@@ -103,12 +84,11 @@ TRANSLATIONS = {
     }
 }
 
-# ---------------- Helpers ----------------
-
 def t(key: str) -> str:
     lang = st.session_state.get('lang', 'en')
     return TRANSLATIONS.get(lang, TRANSLATIONS['en']).get(key, key)
 
+# ---------------- Helper functions ----------------
 
 def read_file(uploaded_file):
     """Read and clean Excel/CSV files with smart header detection."""
@@ -119,10 +99,13 @@ def read_file(uploaded_file):
 
     # Try to read as Excel, then fallback to CSV
     try:
-        df = pd.read_excel(uploaded_file, header=None)
+        if name.endswith('.csv'):
+            df = pd.read_csv(uploaded_file, header=None, encoding='utf-8', engine='python')
+        else:
+            df = pd.read_excel(uploaded_file, header=None, engine='openpyxl')
     except Exception:
         try:
-            df = pd.read_csv(uploaded_file, header=None, encoding='utf-8')
+            df = pd.read_csv(uploaded_file, header=None, encoding='utf-8', engine='python')
         except Exception:
             st.error("⚠️ Could not read file. Please upload a valid Excel or CSV file.")
             return None
@@ -130,47 +113,51 @@ def read_file(uploaded_file):
     # Drop completely empty rows and columns
     df = df.dropna(how='all').dropna(axis=1, how='all')
 
-    # Detect first non-empty row (likely headers)
-    header_row = None
-    for i in range(len(df)):
-        non_empty_ratio = df.iloc[i].notna().mean()
-        if non_empty_ratio > 0.5:  # if half of the cells are filled
-            header_row = i
-            break
+    # Detect header row: pick the row with the most non-null values
+    header_row = df.notna().sum(axis=1).idxmax()
+    # If header row looks like 'Unnamed' or numeric index, try to find first row with string values
+    header_values = df.iloc[header_row].astype(str).str.strip()
+    if all(header_values.str.contains('^Unnamed', na=False)) or header_values.isnull().all():
+        # fallback: find first row with >50% non-empty
+        header_row = None
+        for i in range(len(df)):
+            if df.iloc[i].notna().mean() > 0.5:
+                header_row = i
+                break
+        if header_row is None:
+            header_row = 0
 
-    # Use detected row as header
-    if header_row is not None:
-        df.columns = df.iloc[header_row].astype(str).str.strip()
-        df = df.iloc[header_row + 1:].reset_index(drop=True)
+    df.columns = df.iloc[header_row].astype(str).str.strip()
+    df = df.iloc[header_row + 1:].reset_index(drop=True)
 
-    # Clean column names: remove Unnamed or blanks
+    # Clean column names: replace Unnamed or blanks with Column_i
     df.columns = [
-        col if (isinstance(col, str) and not col.startswith("Unnamed") and col.strip() != "")
+        col if (isinstance(col, str) and col.strip() != "" and not col.strip().startswith("Unnamed"))
         else f"Column_{i}"
         for i, col in enumerate(df.columns)
     ]
 
     # Drop empty rows after cleaning
-    df = df.dropna(how="all")
+    df = df.dropna(how="all").reset_index(drop=True)
 
-    # Try converting numeric columns
+    # Try converting numeric columns (safe)
     for c in df.columns:
         try:
             df[c] = pd.to_numeric(df[c], errors='ignore')
         except Exception:
             pass
 
+    # Drop duplicated columns by name keeping first occurrence
+    if df.columns.duplicated().any():
+        df = df.loc[:, ~df.columns.duplicated()]
+
     return df
-
-
-
 
 def grand_totals(df: pd.DataFrame):
     numeric = df.select_dtypes(include=[np.number])
     totals = numeric.sum(numeric_only=True)
     grand = totals.sum()
     return totals.to_dict(), grand
-
 
 def stats_summary(df: pd.DataFrame):
     numeric = df.select_dtypes(include=[np.number])
@@ -179,7 +166,6 @@ def stats_summary(df: pd.DataFrame):
     summary = numeric.agg(['count', 'mean', 'median', 'max', 'min', 'std']).transpose()
     summary = summary.rename(columns={'std': 'dev'})
     return summary
-
 
 def generate_pivot(df, rows, cols, values, aggfunc):
     agg_map = {
@@ -200,32 +186,17 @@ def generate_pivot(df, rows, cols, values, aggfunc):
         st.error(f"Pivot error: {e}")
         return None
 
-
-def simple_forecast(series: pd.Series, periods: int = 12):
-    s = series.dropna()
-    if s.empty or len(s) < 3:
-        return pd.DataFrame()
-    idx = np.arange(len(s))
-    deg = 1 if len(s) < 6 else 2
-    coeffs = np.polyfit(idx, s.values, deg)
-    p = np.poly1d(coeffs)
-    future_idx = np.arange(len(s), len(s) + periods)
-    preds = p(future_idx)
-    return pd.DataFrame({'forecast': preds}, index=future_idx)
-
-
 def df_to_excel_bytes(sheets: dict):
     out = io.BytesIO()
     with pd.ExcelWriter(out, engine='xlsxwriter') as writer:
-        for name, df in sheets.items():
+        for name, df_sheet in sheets.items():
             try:
                 safe = str(name)[:31]
-                df.to_excel(writer, sheet_name=safe, index=False)
+                df_sheet.to_excel(writer, sheet_name=safe, index=False)
             except Exception:
                 pass
     out.seek(0)
     return out
-
 
 def create_html_report(df: pd.DataFrame, insights: list):
     html = '<html><head><meta charset="utf-8"><title>Report</title></head><body>'
@@ -271,11 +242,11 @@ with col1:
         df = read_file(uploaded)
     elif load_sample:
         df = pd.DataFrame({
-            'مبيعات': pd.date_range(end=pd.Timestamp.today(), periods=12, freq='M'),
-            'Category': ['A', 'B', 'C'] * 4,
-            'Sales': np.random.randint(100, 1000, 12),
-            'Quantity': np.random.randint(1, 50, 12),
-            'Profit': np.random.randint(-50, 300, 12)
+            'مبيعات': pd.date_range(end=pd.Timestamp.today(), periods=24, freq='M'),
+            'Category': ['A', 'B', 'C'] * 8,
+            'Sales': np.random.randint(100, 1000, 24),
+            'Quantity': np.random.randint(1, 50, 24),
+            'Profit': np.random.randint(-50, 300, 24)
         })
     else:
         df = None
@@ -290,7 +261,7 @@ with col2:
         st.subheader('Configuration')
         st.markdown('Choose the columns manually (date & numeric KPIs).')
         default_date = 'مبيعات' if 'مبيعات' in all_cols else None
-        date_col = st.selectbox(t('date_column'), options=[''] + all_cols, index=all_cols.index(default_date) + 1 if default_date else 0)
+        date_col = st.selectbox(t('date_column'), options=[''] + all_cols, index=all_cols.index(default_date)+1 if default_date else 0)
         date_col = date_col if date_col != '' else None
 
         numeric_cols = st.multiselect(t('kpi_selection'), options=all_cols, default=[c for c in all_cols if pd.api.types.is_numeric_dtype(df[c])][:3])
@@ -298,10 +269,9 @@ with col2:
         # Totals and KPIs
         st.subheader(t('total_everything'))
         totals_dict, grand = grand_totals(df)
-        # Show top numeric totals as metrics
-        kpi_cols_display = list(totals_dict.keys())[:4]
-        kpi_cols = st.columns(len(kpi_cols_display) if kpi_cols_display else 1)
-        for i, k in enumerate(kpi_cols_display):
+        kpi_display = list(totals_dict.keys())[:4]
+        kpi_cols = st.columns(len(kpi_display) if kpi_display else 1)
+        for i, k in enumerate(kpi_display):
             kpi_cols[i].metric(k, f"{totals_dict[k]:,.2f}")
         st.markdown(f"**{t('grand_total')}:** {grand:,.2f}")
 
@@ -322,7 +292,8 @@ with col2:
         else:
             insights.append('No missing values detected')
         insights.append(f"Rows: {df.shape[0]}, Columns: {df.shape[1]}")
-        # top categorical values
+
+        # top categorical values with safe handling
         obj_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
         for c in obj_cols[:3]:
             try:
@@ -333,18 +304,18 @@ with col2:
             except Exception as e:
                 vals = []
                 st.warning(f"Could not analyze column '{c}': {e}")
-
-        
             insights.append(f"Top values for {c}: {', '.join([str(v) for v in vals])}")
+
         num = df.select_dtypes(include=[np.number])
         if num.shape[1] >= 2:
             corr = num.corr().abs()
-            top_pairs = corr.unstack().sort_values(ascending=False).drop_duplicates()
-            # attempt to add one strong correlation
-            for (a, b), v in top_pairs.items():
-                if a != b:
-                    insights.append(f"Correlation between {a} and {b}: {v:.2f}")
-                    break
+            # top correlation pair
+            corr_unstack = corr.where(~np.eye(corr.shape[0], dtype=bool)).unstack().dropna()
+            if not corr_unstack.empty:
+                top_pair = corr_unstack.sort_values(ascending=False).index[0]
+                top_val = corr_unstack.sort_values(ascending=False).iloc[0]
+                insights.append(f"Correlation between {top_pair[0]} and {top_pair[1]}: {top_val:.2f}")
+
         for ins in insights:
             st.write('- ', ins)
 
@@ -416,48 +387,138 @@ with col2:
                 excel_bytes = df_to_excel_bytes({'pivot': pvt.reset_index()})
                 st.download_button(t('download_pivot'), data=excel_bytes, file_name='pivot_table.xlsx')
 
-        # Forecasting
+        # Forecasting (with real future dates + confidence band)
         st.markdown('---')
         st.subheader(t('forecasting'))
-        # manual selection enforced
         fc_col = st.selectbox(t('forecast_column'), options=[''] + all_cols, index=0)
         fc_periods = st.number_input(t('forecast_periods'), min_value=1, max_value=365, value=12)
+        st.write("🔮 " + ("اضغط تشغيل التنبؤ بعد اختيار العمود والفترات" if st.session_state.get('lang', 'en') == 'ar' else "Select column & periods then press Run Forecast"))
         if st.button(t('run_forecast')):
             if fc_col == '':
+                st.warning('Select a numeric column to forecast')
+            else:
                 try:
-                    tmp = df[[date_col, fc_col]].dropna()
-                    tmp[date_col] = pd.to_datetime(tmp[date_col], errors='coerce')
-                    tmp = tmp.dropna(subset=[date_col])
-                    tmp = tmp.groupby(date_col, as_index=False)[fc_col].mean()
-                    tmp = tmp.sort_values(by=date_col)
-                    y = tmp[fc_col].values
-                    x = range(len(y))
-                    coef = np.polyfit(x, y, 1)
-                    trend = np.poly1d(coef)
-                    last_date = tmp[date_col].max()
-                                 
-                    future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=steps, freq='D')
-                    future_x = range(len(y), len(y) + steps)
-                    forecast = trend(future_x)
-                    forecast_df = pd.DataFrame({date_col: future_dates, "forecast": forecast})
-                    fig = px.line()
-                    fig.add_scatter(x=tmp[date_col], y=tmp[fc_col], mode='lines', name='البيانات الفعلية')
-                    fig.add_scatter(x=forecast_df[date_col], y=forecast_df["forecast"], mode='lines',
-                                    name='التنبؤ', line=dict(dash='dash', color='red', width=3))
-                    st.plotly_chart(fig, use_container_width=True)
-                    st.dataframe(forecast_df)
-                except Exception as e:
-                    st.error(f"Forecasting failed: {e}")
+                    # Prepare data
+                    tmp = df[[date_col, fc_col]].copy() if date_col else None
+                    if date_col and tmp is not None:
+                        tmp[date_col] = pd.to_datetime(tmp[date_col], errors='coerce')
+                        tmp = tmp.dropna(subset=[date_col, fc_col])
+                        # Aggregate by date (mean) to remove duplicates, then set index
+                        tmp = tmp.groupby(date_col, as_index=False)[fc_col].mean().sort_values(date_col)
+                        tmp_series = tmp.set_index(date_col)[fc_col]
+                        # ensure unique index
+                        tmp_series = tmp_series[~tmp_series.index.duplicated(keep='first')]
 
-                else:
-                    # no date column: forecast on index sequence
-                    series = df[fc_col]
-                    pred = simple_forecast(series, periods=int(fc_periods))
-                    if pred.empty:
-                        st.info('Not enough data to forecast')
+                        if tmp_series.shape[0] < 3:
+                            st.warning('Not enough unique dated observations to forecast (need >= 3).')
+                        else:
+                            # Fit polynomial trend (degree 1 or 2)
+                            n = tmp_series.shape[0]
+                            deg = 1 if n < 6 else 2
+                            x = np.arange(n)
+                            coeffs = np.polyfit(x, tmp_series.values, deg)
+                            model = np.poly1d(coeffs)
+
+                            # Residuals -> estimate sigma for confidence band
+                            fitted = model(x)
+                            resid = tmp_series.values - fitted
+                            resid_std = np.nanstd(resid)
+
+                            # Infer frequency for future dates
+                            try:
+                                freq = pd.infer_freq(tmp_series.index)
+                                if freq is None:
+                                    # fallback: if index spacing irregular pick daily
+                                    freq = 'D'
+                            except Exception:
+                                freq = 'D'
+
+                            last = tmp_series.index.max()
+                            future_index = pd.date_range(start=last + pd.Timedelta(1, unit='D'), periods=int(fc_periods), freq=freq)
+
+                            future_x = np.arange(n, n + int(fc_periods))
+                            preds = model(future_x)
+
+                            # Confidence band (approximate) using residual std
+                            ci = 1.96 * resid_std
+                            lower = preds - ci
+                            upper = preds + ci
+
+                            # Build forecast DataFrame with dates and bands
+                            forecast_df = pd.DataFrame({
+                                date_col: future_index,
+                                'forecast': preds,
+                                'lower': lower,
+                                'upper': upper
+                            })
+
+                            # Plot: actual + forecast + confidence band
+                            fig = go.Figure()
+                            fig.add_trace(go.Scatter(x=tmp_series.index, y=tmp_series.values,
+                                                     mode='lines', name=('البيانات الفعلية' if st.session_state.get('lang','en')=='ar' else 'Actual'),
+                                                     line=dict(color='blue')))
+                            fig.add_trace(go.Scatter(x=forecast_df[date_col], y=forecast_df['forecast'],
+                                                     mode='lines', name=('التنبؤ' if st.session_state.get('lang','en')=='ar' else 'Forecast'),
+                                                     line=dict(dash='dash', color='red', width=3)))
+                            # Confidence band (fill between upper and lower)
+                            fig.add_trace(go.Scatter(
+                                x=list(forecast_df[date_col]) + list(forecast_df[date_col][::-1]),
+                                y=list(forecast_df['upper']) + list(forecast_df['lower'][::-1]),
+                                fill='toself',
+                                fillcolor='rgba(255,0,0,0.15)',
+                                line=dict(color='rgba(255,255,255,0)'),
+                                hoverinfo="skip",
+                                showlegend=True,
+                                name=('Confidence Interval' if st.session_state.get('lang','en')=='en' else 'نطاق الثقة')
+                            ))
+                            fig.update_layout(title=f"{fc_col} - Forecast", xaxis_title=date_col, yaxis_title=fc_col)
+                            st.plotly_chart(fig, use_container_width=True)
+                            st.subheader(('Forecast Table' if st.session_state.get('lang','en')=='en' else 'جدول التنبؤ'))
+                            st.dataframe(forecast_df.reset_index(drop=True))
                     else:
-                        st.line_chart(pd.concat([series.rename('actual'), pred['forecast']], axis=0))
-                        st.dataframe(pred.head(50))
+                        # No date column provided: forecast on index sequence
+                        series = df[fc_col].dropna().astype(float)
+                        if series.shape[0] < 3:
+                            st.warning('Not enough data to forecast.')
+                        else:
+                            n = series.shape[0]
+                            deg = 1 if n < 6 else 2
+                            x = np.arange(n)
+                            coeffs = np.polyfit(x, series.values, deg)
+                            model = np.poly1d(coeffs)
+                            fitted = model(x)
+                            resid = series.values - fitted
+                            resid_std = np.nanstd(resid)
+                            future_x = np.arange(n, n + int(fc_periods))
+                            preds = model(future_x)
+                            ci = 1.96 * resid_std
+                            lower = preds - ci
+                            upper = preds + ci
+                            # Build forecast with numeric index
+                            forecast_df = pd.DataFrame({
+                                'index': future_x,
+                                'forecast': preds,
+                                'lower': lower,
+                                'upper': upper
+                            })
+                            # Plot actual + forecast
+                            fig = go.Figure()
+                            fig.add_trace(go.Scatter(x=x, y=series.values, mode='lines', name='Actual'))
+                            fig.add_trace(go.Scatter(x=future_x, y=preds, mode='lines', name='Forecast', line=dict(dash='dash', color='red', width=3)))
+                            fig.add_trace(go.Scatter(
+                                x=list(future_x) + list(future_x[::-1]),
+                                y=list(upper) + list(lower[::-1]),
+                                fill='toself',
+                                fillcolor='rgba(255,0,0,0.15)',
+                                line=dict(color='rgba(255,255,255,0)'),
+                                hoverinfo="skip",
+                                showlegend=True,
+                                name=('Confidence Interval' if st.session_state.get('lang','en')=='en' else 'نطاق الثقة')
+                            ))
+                            st.plotly_chart(fig, use_container_width=True)
+                            st.dataframe(forecast_df)
+                except Exception as e:
+                    st.error(f'Forecasting failed: {e}')
 
         # Missing values & correlations
         st.markdown('---')
@@ -500,3 +561,4 @@ with col2:
 # footer
 st.markdown('---')
 st.caption('Save this script to your GitHub repo and deploy on Streamlit Cloud. Requirements: streamlit, pandas, numpy, plotly, xlsxwriter, openpyxl')
+
