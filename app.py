@@ -321,106 +321,129 @@ with col2:
             st.info('No numeric columns for statistics')
 
         # Insights
-        # ---------------------------------------------------------------
         # =====================================
-        # 🤖 Automated Insights (Enhanced Table View)
+        # 🤖 Automated Insights (Smart Summary + Table + Chart)
         # =====================================
-        
-        import numpy as np
         import pandas as pd
+        import numpy as np
         import streamlit as st
+        import plotly.express as px
         
         st.header("🤖 Automated Insights")
         
         try:
-            # Helper: Find column name safely
+            # --- Initialize safe list ---
+            insights = []
+        
+            # --- Helper function to find columns (Arabic or English) ---
             def safe_find(df, possible_names):
                 for name in possible_names:
                     for col in df.columns:
-                        if str(col).strip() == str(name).strip():
+                        if str(col).strip().lower() == str(name).strip().lower():
                             return col
                 return None
         
-            # --- Detect columns automatically ---
-            revenue_col = safe_find(df, ["القيمة بعد الضريبة", "صافي المبيعات", "الإيرادات", "Revenue", "Total Revenue"])
-            discount_col = safe_find(df, ["الخصومات", "خصم", "Discount", "Total Discount"])
-            tax_col = safe_find(df, ["الضريبة", "ضريبة الصنف", "Tax", "Total Tax"])
-            qty_col = safe_find(df, ["الكمية", "كمية كرتون", "Quantity", "Total Quantity"])
-            branch_col = safe_find(df, ["الفرع", "Branch"])
-            salesman_col = safe_find(df, ["اسم المندوب", "مندوب", "Salesman"])
-            product_col = safe_find(df, ["اسم الصنف", "الصنف", "Product"])
+            # --- Detect key columns dynamically ---
+            revenue_col = safe_find(df, ["القيمة بعد الضريبة", "صافي المبيعات", "الإيرادات", "revenue", "total revenue"])
+            discount_col = safe_find(df, ["الخصومات", "خصم", "discount", "total discount"])
+            tax_col = safe_find(df, ["الضريبة", "ضريبة الصنف", "tax", "total tax"])
+            qty_col = safe_find(df, ["الكمية", "كمية كرتون", "quantity", "total quantity"])
+            branch_col = safe_find(df, ["الفرع", "branch"])
+            salesman_col = safe_find(df, ["اسم المندوب", "مندوب", "salesman"])
+            product_col = safe_find(df, ["اسم الصنف", "الصنف", "product"])
         
-            # --- Compute insights dynamically ---
+            # --- Prepare summary dictionary ---
             insights_dict = {}
         
+            # --- Calculate totals ---
             if revenue_col in df.columns:
-                insights_dict["Total Revenue"] = f"{df[revenue_col].sum():,.2f}"
-            if discount_col in df.columns:
-                insights_dict["Total Discounts"] = f"{df[discount_col].sum():,.2f}"
-            if tax_col in df.columns:
-                insights_dict["Total Tax"] = f"{df[tax_col].sum():,.2f}"
-            if qty_col in df.columns:
-                insights_dict["Total Quantity"] = f"{df[qty_col].sum():,.2f}"
+                total_revenue = df[revenue_col].sum()
+                insights_dict["Total Revenue"] = f"{total_revenue:,.2f}"
+                insights.append(f"💰 Total Revenue: {total_revenue:,.2f}")
         
+            if discount_col in df.columns:
+                total_discount = df[discount_col].sum()
+                insights_dict["Total Discounts"] = f"{total_discount:,.2f}"
+                insights.append(f"🎯 Total Discounts: {total_discount:,.2f}")
+        
+            if tax_col in df.columns:
+                total_tax = df[tax_col].sum()
+                insights_dict["Total Tax"] = f"{total_tax:,.2f}"
+                insights.append(f"💸 Total Tax: {total_tax:,.2f}")
+        
+            if qty_col in df.columns:
+                total_qty = df[qty_col].sum()
+                insights_dict["Total Quantity"] = f"{total_qty:,.2f}"
+                insights.append(f"📦 Total Quantity: {total_qty:,.2f}")
+        
+            # --- Find top categories ---
             if branch_col in df.columns and revenue_col in df.columns:
                 top_branch = df.groupby(branch_col)[revenue_col].sum().idxmax()
                 insights_dict["Top Branch by Revenue"] = str(top_branch)
+                insights.append(f"🏢 Top Branch by Revenue: {top_branch}")
         
             if salesman_col in df.columns and revenue_col in df.columns:
                 top_salesman = df.groupby(salesman_col)[revenue_col].sum().idxmax()
                 insights_dict["Top Salesman"] = str(top_salesman)
+                insights.append(f"🧍‍♂️ Top Salesman: {top_salesman}")
         
             if product_col in df.columns and revenue_col in df.columns:
                 top_product = df.groupby(product_col)[revenue_col].sum().idxmax()
                 insights_dict["Top Product"] = str(top_product)
+                insights.append(f"🛒 Top Product: {top_product}")
         
-            # --- Display nicely on the left side ---
-            st.markdown("### 📊 Key Insights Summary")
-            col1, col2 = st.columns([1.2, 2])
+            # --- Optional correlation check (for numeric relationships) ---
+            num = df.select_dtypes(include=[np.number])
+            if num.shape[1] >= 2:
+                corr = num.corr().abs()
+                corr_unstack = corr.where(~np.eye(corr.shape[0], dtype=bool)).unstack().dropna()
+                if not corr_unstack.empty:
+                    top_pair = corr_unstack.sort_values(ascending=False).index[0]
+                    top_val = corr_unstack.sort_values(ascending=False).iloc[0]
+                    insights.append(f"📈 Strongest correlation between **{top_pair[0]}** and **{top_pair[1]}**: {top_val:.2f}")
         
+            # --- Display the results ---
+            st.markdown("### 📊 Summary of Key Metrics")
+            col1, col2 = st.columns([1.3, 2])
+        
+            # --- Left: Table of metrics ---
             with col1:
                 if insights_dict:
-                    insights_df = pd.DataFrame(list(insights_dict.items()), columns=["Insight", "Value"])
+                    insights_df = pd.DataFrame(list(insights_dict.items()), columns=["Metric", "Value"])
                     st.table(insights_df)
                 else:
-                    st.info("⚠️ No matching columns found for insights calculation.")
+                    st.info("⚠️ لم يتم العثور على بيانات كافية لإنشاء التحليل التلقائي.")
         
+            # --- Right: Textual insights ---
             with col2:
-                st.info("📈 These insights summarize your uploaded data automatically (revenue, discounts, top performers, etc.).")
+                st.markdown("### 💡 Key Observations")
+                for ins in insights:
+                    st.write("- ", ins)
+        
+            # --- Chart: Revenue by Branch (if available) ---
+            if revenue_col and branch_col:
+                st.markdown("### 🏢 Revenue by Branch")
+                fig = px.bar(
+                    df.groupby(branch_col)[revenue_col].sum().reset_index(),
+                    x=branch_col,
+                    y=revenue_col,
+                    title="Branch Performance",
+                    color=branch_col,
+                    text_auto=".2s"
+                )
+                fig.update_layout(showlegend=False)
+                st.plotly_chart(fig, use_container_width=True)
         
         except Exception as e:
             st.error(f"⚠️ Error generating insights: {e}")
 
+            
         
             
         
 
 
-        # top categorical values with safe handling
-        obj_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
-        for c in obj_cols[:3]:
-            try:
-                col_data = df[c]
-                if isinstance(col_data, pd.DataFrame):
-                    col_data = col_data.iloc[:, 0]
-                vals = col_data.dropna().astype(str).value_counts().head(3).index.tolist()
-            except Exception as e:
-                vals = []
-                st.warning(f"Could not analyze column '{c}': {e}")
-            
-
-        num = df.select_dtypes(include=[np.number])
-        if num.shape[1] >= 2:
-            corr = num.corr().abs()
-            # top correlation pair
-            corr_unstack = corr.where(~np.eye(corr.shape[0], dtype=bool)).unstack().dropna()
-            if not corr_unstack.empty:
-                top_pair = corr_unstack.sort_values(ascending=False).index[0]
-                top_val = corr_unstack.sort_values(ascending=False).iloc[0]
-                insights.append(f"Correlation between {top_pair[0]} and {top_pair[1]}: {top_val:.2f}")
-
-        for ins in insights:
-            st.write('- ', ins)
+    
 
         # Charts & visuals
         # ---------------------------------------------------------------
